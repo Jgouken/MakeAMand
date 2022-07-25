@@ -9,6 +9,6 @@ module.exports = {
 		db: db,
     
     name: 'Make-A-Mand',
-    TOKEN: `OTMyMzk0NDI4NDUzMjMyNzUx.YeSV-g.k9bSc2kacuS8OMAwKM3Kol89vNk`,
+    TOKEN: process.env.TOKEN,
     prefix: `m-`
 }
