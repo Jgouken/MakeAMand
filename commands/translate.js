@@ -2,6 +2,23 @@ const { MessageActionRow, MessageButton, MessageEmbed } = require('discord.js');
 const translate = require('node-google-translate-skidz');
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
 
+/**
+        * Returns an output translation of an input.
+        * 
+        * @param { String } input The text input for the translator.
+        * @param { String } targetLang The target language for the input to translate to.
+        * @return { Object } Translated Result
+        */
+async function translation(input, targetLang) {
+    return translate({
+        text: input,
+        source: 'auto',
+        target: targetLang
+    }, async function (result) {
+        return result;
+    })
+}
+
 module.exports = {
     name: 'translateto',
     aliases: ['t', 'trt', 'tt'],
@@ -11,33 +28,37 @@ module.exports = {
 
     async execute(message, member, args, cmds, config, bot) {
         if (args[0]) {
+            var arg = args.shift().toLocaleLowerCase()
+            if (!args[0]) {
+                return message.channel.send({
+                    embeds: [{
+                        title: `Incomplete!`,
+                        color: 0xff0000,
+                        description: `You need some text to translate!\nEx: **${config.prefix}t ${arg.slice(0, 2)} Hola!**`,
+                        footer: {
+                            text: `Status Code: 400`
+                        }
+                    }]
+                })
+            }
             let languages = 'af,sq,ar,hy,az,be,bn,bs,bg,ca,ha,zh,co,hr,cs,da,nl,eo,et,fr,es,fl,fi,mg,ig,ga,gl,ka,de,el,gu,ht,ha,he,hi,hm,hu,is,in,it,ja,jv,kn,kk,km,ko,lo,la,lv,lt,mk,ms,ml,mt,mi,mr,mn,ne,no,ny,pl,pt,br,pa,ro,ru,gd,sr,si,sk,so,st,su,sw,sv,tg,te,th,tr,uk,ur,uz,vi,yi,yo,zu'.split(",")
-            if (args[0] == 'shuffle' || args[0] == 'shu' || args[0] == 'mix' || args[0] == 'run') {
+            if (arg == 'shuffle' || arg == 'shu' || arg == 'mix' || arg == 'run') {
                 // This is when Google Translate translates a message a bunch of times then reverts back to the original language, hopefully messed up.
                 args.shift()
                 var i = 0
-                var x = 0
                 var max = Math.random() * (50 - 20) + 20
                 var last = args.join(" ")
                 var firstLang = "en"
                 async function trloop(input) {
                     i++
-                    if (input == undefined) input = last
+                    if (!input) input = last
                     last = input
-                    translate({
-                        text: input,
-                        source: 'auto',
-                        target: languages[Math.floor(Math.random() * languages.length)]
-                    }, async function (result) {
-                        if (x < 1) firstLang = result.src; x++
+                    await translation(input, languages[Math.floor(Math.random() * languages.length)]).then(async (result) => {
+                        if (i < 2) firstLang = result.src
                         if (i < max) { last = result.translation; await trloop(result.translation) }
                         else {
-                            await translate({
-                                text: result.translation,
-                                source: 'auto',
-                                target: firstLang
-                            }, async function (result) {
-                                var footer = ''
+                            await translation(result.translation, firstLang).then(async (result) => {
+                                var footer = ``
                                 if (result.sentences) if (result.sentences.length > 1) if (result.sentences.at(-1).translit) footer = `${result.sentences.at(-1).translit}`
 
                                 message.channel.send({
@@ -56,7 +77,6 @@ module.exports = {
                 trloop(args.join(" "))
                 message.channel.sendTyping();
             } else {
-                var arg = args.shift().toLocaleLowerCase()
                 if (arg == 'jp') arg = 'ja'
                 translate({
                     text: args.join(" "),
@@ -76,18 +96,15 @@ module.exports = {
                         })
                     }
 
-                    var footer = ''
-                    if (result.sentences) if (result.sentences.length > 1) if (result.sentences.at(-1).translit) footer = `${result.sentences.at(-1).translit}`
+                    var footer = `(Conf. ${Math.round(result.confidence * 100)}%)`
+                    if (result.sentences) if (result.sentences.length > 1) if (result.sentences.at(-1).translit) footer = `${result.sentences.at(-1).translit}\n(Conf. ${Math.round(result.confidence * 100)}%)`
 
                     if (result.sentences[0].trans === result.sentences[0].orig && result.src != arg) {
                         message.channel.send({
                             embeds: [{
                                 title: `Hmm...`,
                                 color: 0xff0000,
-                                description: `"${arg}" is not a language.`,
-                                footer: {
-                                    text: `Find the correct abbreviation for the language you wish to translate to.`
-                                }
+                                description: `It seems that "${arg}" is not an abbreviated language. Check out an [Abbreviations List](https://www.sitepoint.com/iso-2-letter-language-codes/) to find what language you're looking for.`,
                             }]
                         })
                     } else {
@@ -109,15 +126,11 @@ module.exports = {
                 const filter = m => m.author === message.author;
                 const collector = message.channel.createMessageCollector({ filter, time: 60000, max: 1 });
 
-                collector.on('collect', m => {
+                collector.on('collect', async m => {
                     var arguments = m.content.split(" ");
                     var arg = arguments.shift().toLocaleLowerCase()
                     if (arg == 'jp') arg = 'ja'
-                    translate({
-                        text: arguments.join(" "),
-                        source: 'auto',
-                        target: arg
-                    }, async function (result) {
+                    await translation(arguments.join(" "), arg).then(async (result) => {
                         if (!result.translation) {
                             return message.channel.send({
                                 embeds: [{
@@ -131,18 +144,15 @@ module.exports = {
                             })
                         }
 
-                        var footer = ''
-                        if (result.sentences) if (result.sentences.length > 1) if (result.sentences.at(-1).translit) footer = `${result.sentences.at(-1).translit}`
+                        var footer = `(Conf. ${Math.round(result.confidence * 100)}%)`
+                        if (result.sentences) if (result.sentences.length > 1) if (result.sentences.at(-1).translit) footer = `${result.sentences.at(-1).translit}\n(Conf. ${Math.round(result.confidence * 100)}%)`
 
                         if (result.sentences[0].trans === result.sentences[0].orig && result.src != arg) {
                             message.channel.send({
                                 embeds: [{
                                     title: `Hmm...`,
                                     color: 0xff0000,
-                                    description: `"${arg}" is not a language.`,
-                                    footer: {
-                                        text: `Find the correct abbreviation for the language you wish to translate to.`
-                                    }
+                                    description: `It seems that "${arg}" is not an abbreviated language. Check out an [Abbreviations List](https://www.sitepoint.com/iso-2-letter-language-codes/) to find what language you're looking for.`,
                                 }]
                             })
                         } else {
